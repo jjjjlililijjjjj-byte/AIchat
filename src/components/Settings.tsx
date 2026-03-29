@@ -59,6 +59,7 @@ export default function Settings() {
 
   const handleSaveApiKey = async () => {
     let isConnected = false;
+    let errorMessage = 'API 连接测试失败，请检查配置。';
     try {
       if (apiPlatform === 'gemini') {
         const ai = new GoogleGenAI({ apiKey: apiKey });
@@ -72,26 +73,29 @@ export default function Settings() {
           }
         });
         if (response.ok) isConnected = true;
+        else errorMessage = `API 连接失败 (状态码: ${response.status})`;
       } else if (apiPlatform === 'ollama') {
         const response = await fetch(`${apiUrl || 'http://localhost:11434'}/api/tags`);
         if (response.ok) isConnected = true;
+        else errorMessage = `Ollama 连接失败 (请确保已开启 CORS)`;
       }
     } catch (e) {
       console.error(e);
+      errorMessage = `API 连接异常: ${e instanceof Error ? e.message : String(e)}`;
     }
 
     if (!isConnected) {
-      alert('API 连接测试失败，请检查配置。');
-      setApiStatus('disconnected');
-      return;
+      if (!confirm(`${errorMessage}\n\n是否仍要保存配置？`)) {
+        return;
+      }
     }
 
     localStorage.setItem('API_KEY', apiKey);
     localStorage.setItem('API_PLATFORM', apiPlatform);
     localStorage.setItem('API_MODEL', apiModel);
     localStorage.setItem('API_URL', apiUrl);
-    setApiStatus('connected');
-    alert('API 配置已保存并测试成功。');
+    setApiStatus(isConnected ? 'connected' : 'disconnected');
+    alert(isConnected ? 'API 配置已保存并测试成功。' : 'API 配置已保存（测试未通过）。');
     setActivePanel(null);
   };
 
