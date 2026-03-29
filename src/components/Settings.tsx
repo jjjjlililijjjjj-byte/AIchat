@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Key, Database, Info, ChevronRight, Camera, ShieldCheck, LogOut, Github, Eye, EyeOff, Download, Upload, ChevronLeft, User, Palette, Image as ImageIcon, Music } from 'lucide-react';
+import { Key, Database, Info, ChevronRight, Camera, ShieldCheck, LogOut, Github, Eye, EyeOff, Download, Upload, ChevronLeft, User, Palette, Image as ImageIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { db, UserSettings } from '../lib/db';
 import { handleImageUpload } from '../lib/utils';
+import { GoogleGenAI } from '@google/genai';
 
 export default function Settings() {
   const [apiKey, setApiKey] = useState('');
   const [apiPlatform, setApiPlatform] = useState('gemini');
   const [apiModel, setApiModel] = useState('gemini-3-flash-preview');
+  const [apiUrl, setApiUrl] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
   const [apiStatus, setApiStatus] = useState<'connected' | 'disconnected'>('disconnected');
   const [activePanel, setActivePanel] = useState<string | null>(null);
@@ -27,6 +29,7 @@ export default function Settings() {
       const storedKey = localStorage.getItem('GEMINI_API_KEY');
       const storedPlatform = localStorage.getItem('API_PLATFORM') || 'gemini';
       const storedModel = localStorage.getItem('API_MODEL') || 'gemini-3-flash-preview';
+      const storedUrl = localStorage.getItem('API_URL') || '';
       
       if (storedKey) {
         setApiKey(storedKey);
@@ -36,6 +39,7 @@ export default function Settings() {
       }
       setApiPlatform(storedPlatform);
       setApiModel(storedModel);
+      setApiUrl(storedUrl);
 
       const settings = await db.settings.get('user_settings');
       if (settings) {
@@ -53,12 +57,41 @@ export default function Settings() {
     setActivePanel(null);
   };
 
-  const handleSaveApiKey = () => {
-    localStorage.setItem('GEMINI_API_KEY', apiKey);
+  const handleSaveApiKey = async () => {
+    let isConnected = false;
+    try {
+      if (apiPlatform === 'gemini') {
+        const ai = new GoogleGenAI({ apiKey: apiKey });
+        await ai.models.generateContent({ model: apiModel, contents: "hi" });
+        isConnected = true;
+      } else if (apiPlatform === 'openai' || apiPlatform === 'deepseek' || apiPlatform === 'custom') {
+        const response = await fetch(`${apiUrl || 'https://api.openai.com/v1'}/models`, {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        if (response.ok) isConnected = true;
+      } else if (apiPlatform === 'ollama') {
+        const response = await fetch(`${apiUrl || 'http://localhost:11434'}/api/tags`);
+        if (response.ok) isConnected = true;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    if (!isConnected) {
+      alert('API 连接测试失败，请检查配置。');
+      setApiStatus('disconnected');
+      return;
+    }
+
+    localStorage.setItem('API_KEY', apiKey);
     localStorage.setItem('API_PLATFORM', apiPlatform);
     localStorage.setItem('API_MODEL', apiModel);
-    setApiStatus(apiKey ? 'connected' : 'disconnected');
-    alert('API 配置已保存至本地。');
+    localStorage.setItem('API_URL', apiUrl);
+    setApiStatus('connected');
+    alert('API 配置已保存并测试成功。');
     setActivePanel(null);
   };
 
@@ -93,7 +126,6 @@ export default function Settings() {
     {
       title: '关于与支持',
       items: [
-        { icon: <Music className="w-5 h-5" />, label: '听歌排行', color: 'bg-pink-400', action: 'music_ranking' },
         { icon: <Info className="w-5 h-5" />, label: '关于 AI 小手机', color: 'bg-orange-500', action: 'about' },
         { icon: <ShieldCheck className="w-5 h-5" />, label: '隐私协议', color: 'bg-purple-500', action: 'privacy' },
         { icon: <Github className="w-5 h-5" />, label: '开源地址', color: 'bg-slate-800', action: 'github' },
@@ -311,22 +343,48 @@ export default function Settings() {
                       className="w-full bg-[#F7F7F7] border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#007AFF]/20 transition-all outline-none"
                     >
                       <option value="gemini">Google Gemini</option>
-                      <option value="openai">OpenAI (暂未实现)</option>
-                      <option value="anthropic">Anthropic (暂未实现)</option>
+                      <option value="openai">OpenAI</option>
+                      <option value="deepseek">DeepSeek</option>
+                      <option value="ollama">Ollama</option>
+                      <option value="custom">自定义</option>
                     </select>
                   </div>
-                  <div>
-                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">模型选择</label>
-                    <select 
-                      value={apiModel}
-                      onChange={(e) => setApiModel(e.target.value)}
-                      className="w-full bg-[#F7F7F7] border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#007AFF]/20 transition-all outline-none"
-                    >
-                      <option value="gemini-3-flash-preview">gemini-3-flash-preview</option>
-                      <option value="gemini-3.1-flash-preview">gemini-3.1-flash-preview</option>
-                      <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview</option>
-                    </select>
-                  </div>
+                  {apiPlatform === 'custom' && (
+                    <>
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">API URL</label>
+                        <input 
+                          value={apiUrl}
+                          onChange={(e) => setApiUrl(e.target.value)}
+                          placeholder="https://api.example.com/v1"
+                          className="w-full bg-[#F7F7F7] border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#007AFF]/20 transition-all outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">模型名称</label>
+                        <input 
+                          value={apiModel}
+                          onChange={(e) => setApiModel(e.target.value)}
+                          placeholder="gpt-4o"
+                          className="w-full bg-[#F7F7F7] border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#007AFF]/20 transition-all outline-none"
+                        />
+                      </div>
+                    </>
+                  )}
+                  {apiPlatform !== 'custom' && (
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">模型选择</label>
+                      <select 
+                        value={apiModel}
+                        onChange={(e) => setApiModel(e.target.value)}
+                        className="w-full bg-[#F7F7F7] border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#007AFF]/20 transition-all outline-none"
+                      >
+                        <option value="gemini-3-flash-preview">gemini-3-flash-preview</option>
+                        <option value="gemini-3.1-flash-preview">gemini-3.1-flash-preview</option>
+                        <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview</option>
+                      </select>
+                    </div>
+                  )}
                   <div>
                     <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">API 密钥</label>
                     <div className="relative">
