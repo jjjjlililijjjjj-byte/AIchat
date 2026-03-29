@@ -1,0 +1,5 @@
+{
+  "name": "AI Small Phone Engine",
+  "description": "An immersive AI social simulation system mimicking a mobile OS with virtual personalities.",
+  "requestFramePermissions": ["microphone"]
+}
