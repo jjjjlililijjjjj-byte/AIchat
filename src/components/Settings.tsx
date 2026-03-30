@@ -180,7 +180,7 @@ export default function Settings() {
                   'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                  model: apiModel || 'gpt-3.5-turbo',
+                  model: (apiModel && !apiModel.includes('gemini') && !(apiPlatform === 'deepseek' && !apiModel.includes('deepseek'))) ? apiModel : (apiPlatform === 'deepseek' ? 'deepseek-chat' : 'gpt-3.5-turbo'),
                   messages: [{ role: 'user', content: 'hi' }],
                   max_tokens: 1
                 })

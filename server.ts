@@ -88,9 +88,6 @@ async function startServer() {
 
       if (platform === 'gemini') {
         let finalApiKey = apiKey;
-        if (!finalApiKey || finalApiKey === 'undefined' || finalApiKey === 'TODO_KEYHERE') {
-          finalApiKey = process.env.GEMINI_API_KEY || '';
-        }
         
         if (!finalApiKey || finalApiKey === 'undefined' || finalApiKey === 'TODO_KEYHERE') {
           return res.status(400).json({ error: 'API key not valid. Please configure a valid API key in Settings.' });
@@ -153,7 +150,7 @@ async function startServer() {
                 'Content-Type': 'application/json'
               },
               body: JSON.stringify({
-                model: model || (platform === 'deepseek' ? 'deepseek-chat' : 'gpt-3.5-turbo'),
+                model: (model && !model.includes('gemini') && !(platform === 'deepseek' && !model.includes('deepseek'))) ? model : (platform === 'deepseek' ? 'deepseek-chat' : 'gpt-3.5-turbo'),
                 messages: [
                   { role: 'system', content: context },
                   { role: 'user', content: prompt }

@@ -34,8 +34,9 @@ export default function App() {
   // Random character chat initiation
   useEffect(() => {
     const randomChatTimer = setInterval(async () => {
-      const apiKey = localStorage.getItem('API_KEY') || localStorage.getItem('GEMINI_API_KEY') || process.env.GEMINI_API_KEY;
-      if (!apiKey || apiKey === 'undefined' || apiKey === 'TODO_KEYHERE') return;
+      const apiPlatform = localStorage.getItem('API_PLATFORM') || 'gemini';
+      let apiKey = localStorage.getItem('API_KEY') || localStorage.getItem('GEMINI_API_KEY');
+      if (!apiKey && apiPlatform !== 'ollama') return;
 
       // 10% chance every 2 minutes (120000ms) to trigger a random message
       if (Math.random() > 0.1) return;

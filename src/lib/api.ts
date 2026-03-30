@@ -1,6 +1,6 @@
 export async function generateAIResponse(context: string, prompt: string): Promise<string> {
   const apiPlatform = localStorage.getItem('API_PLATFORM') || 'gemini';
-  const apiKey = localStorage.getItem('API_KEY') || localStorage.getItem('GEMINI_API_KEY') || process.env.GEMINI_API_KEY || '';
+  let apiKey = localStorage.getItem('API_KEY') || localStorage.getItem('GEMINI_API_KEY');
   const apiModel = localStorage.getItem('API_MODEL') || 'gemini-3-flash-preview';
   const apiUrl = localStorage.getItem('API_URL') || '';
 
@@ -55,7 +55,7 @@ export async function generateAIResponse(context: string, prompt: string): Promi
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-              model: apiModel || 'gpt-3.5-turbo',
+              model: (apiModel && !apiModel.includes('gemini') && !(apiPlatform === 'deepseek' && !apiModel.includes('deepseek'))) ? apiModel : (apiPlatform === 'deepseek' ? 'deepseek-chat' : 'gpt-3.5-turbo'),
               messages: [
                 { role: 'system', content: context },
                 { role: 'user', content: prompt }
