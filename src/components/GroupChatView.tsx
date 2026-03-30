@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { db, ChatMessage, Character, Group } from '../lib/db';
-import { GoogleGenAI } from '@google/genai';
+import { generateAIResponse } from '../lib/api';
 import { ChevronLeft, Plus, Smile, Settings as SettingsIcon, Users, Mic, MicOff, Image as ImageIcon, Search, X, Upload } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { handleImageUpload } from '../lib/utils';
@@ -104,8 +104,6 @@ export default function GroupChatView({ groupId, onBack, setIsAiProcessing, isAi
     setIsAiProcessing(true);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: localStorage.getItem('GEMINI_API_KEY') || process.env.GEMINI_API_KEY || '' });
-      
       // Pick 1-2 random participants to respond
       const responderCount = Math.min(participants.length, Math.floor(Math.random() * 2) + 1);
       const shuffled = [...participants].sort(() => 0.5 - Math.random());
@@ -120,12 +118,8 @@ export default function GroupChatView({ groupId, onBack, setIsAiProcessing, isAi
           return `${senderName}: ${m.text}`;
         }).join('\n');
 
-        const response = await ai.models.generateContent({
-          model: 'gemini-3-flash-preview',
-          contents: `${context}\n对话历史：\n${history}\n用户：${currentInput}\n${char.name}的回复：`,
-        });
+        const text = await generateAIResponse(context, `对话历史：\n${history}\n用户：${currentInput}\n${char.name}的回复：`);
 
-        const text = response.text || '...';
         const aiMsg: ChatMessage = { groupId, characterId: char.id, text, sender: 'ai', timestamp: Date.now(), read: true };
         const aiMsgId = await db.messages.add(aiMsg);
         const newAiMsg = { ...aiMsg, id: Number(aiMsgId) };
@@ -162,8 +156,6 @@ export default function GroupChatView({ groupId, onBack, setIsAiProcessing, isAi
     setIsAiProcessing(true);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: localStorage.getItem('GEMINI_API_KEY') || process.env.GEMINI_API_KEY || '' });
-      
       // Pick 1 random participant to respond to the image
       const responderCount = 1;
       const shuffled = [...participants].sort(() => 0.5 - Math.random());

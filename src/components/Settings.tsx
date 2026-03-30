@@ -13,6 +13,8 @@ export default function Settings() {
   const [showApiKey, setShowApiKey] = useState(false);
   const [apiStatus, setApiStatus] = useState<'connected' | 'disconnected'>('disconnected');
   const [activePanel, setActivePanel] = useState<string | null>(null);
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [isFetchingModels, setIsFetchingModels] = useState(false);
   
   const [userProfile, setUserProfile] = useState<UserSettings>({
     id: 'user_settings',
@@ -51,10 +53,64 @@ export default function Settings() {
     loadSettings();
   }, []);
 
+  useEffect(() => {
+    setAvailableModels([]);
+  }, [apiPlatform]);
+
   const handleSaveProfile = async () => {
     await db.settings.put(userProfile);
     alert('个人信息已保存');
     setActivePanel(null);
+  };
+
+  const fetchModels = async () => {
+    setIsFetchingModels(true);
+    setAvailableModels([]);
+    try {
+      if (apiPlatform === 'gemini') {
+        const models = ['gemini-3-flash-preview', 'gemini-3.1-flash-preview', 'gemini-3.1-pro-preview', 'gemini-2.5-flash-preview-tts', 'gemini-2.5-flash-image'];
+        setAvailableModels(models);
+        if (!models.includes(apiModel)) setApiModel(models[0]);
+      } else if (apiPlatform === 'ollama') {
+        const baseUrl = (apiUrl || 'http://localhost:11434').replace(/\/+$/, '');
+        const res = await fetch(`${baseUrl}/api/tags`);
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        const data = await res.json();
+        if (data.models && data.models.length > 0) {
+          const models = data.models.map((m: any) => m.name);
+          setAvailableModels(models);
+          if (!models.includes(apiModel)) setApiModel(models[0]);
+        }
+      } else {
+        let baseUrl = apiUrl;
+        if (!baseUrl) {
+          if (apiPlatform === 'openai') baseUrl = 'https://api.openai.com/v1';
+          else if (apiPlatform === 'deepseek') baseUrl = 'https://api.deepseek.com';
+          else baseUrl = 'https://api.openai.com/v1';
+        }
+        baseUrl = baseUrl.replace(/\/+$/, '');
+        const modelsUrl = baseUrl.endsWith('/v1') ? `${baseUrl}/models` : `${baseUrl}/v1/models`;
+
+        const res = await fetch(modelsUrl, {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        const data = await res.json();
+        if (data.data && data.data.length > 0) {
+          const models = data.data.map((m: any) => m.id);
+          setAvailableModels(models);
+          if (!models.includes(apiModel)) setApiModel(models[0]);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching models:", error);
+      alert(`获取模型列表失败: ${error instanceof Error ? error.message : String(error)}\n请检查 API URL、秘钥和网络连接（可能存在跨域限制）。`);
+    } finally {
+      setIsFetchingModels(false);
+    }
   };
 
   const handleSaveApiKey = async () => {
@@ -373,42 +429,48 @@ export default function Settings() {
                       <option value="custom">自定义</option>
                     </select>
                   </div>
-                  {apiPlatform === 'custom' && (
-                    <>
-                      <div>
-                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">API URL</label>
-                        <input 
-                          value={apiUrl}
-                          onChange={(e) => setApiUrl(e.target.value)}
-                          placeholder="https://api.example.com/v1"
-                          className="w-full bg-[#F7F7F7] border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#007AFF]/20 transition-all outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">模型名称</label>
+                  {apiPlatform !== 'gemini' && (
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">API URL</label>
+                      <input 
+                        value={apiUrl}
+                        onChange={(e) => setApiUrl(e.target.value)}
+                        placeholder={apiPlatform === 'openai' ? 'https://api.openai.com/v1' : apiPlatform === 'deepseek' ? 'https://api.deepseek.com' : apiPlatform === 'ollama' ? 'http://localhost:11434' : 'https://api.example.com/v1'}
+                        className="w-full bg-[#F7F7F7] border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#007AFF]/20 transition-all outline-none"
+                      />
+                    </div>
+                  )}
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">模型名称</label>
+                    <div className="flex gap-2">
+                      {availableModels.length > 0 ? (
+                        <select
+                          value={apiModel}
+                          onChange={(e) => setApiModel(e.target.value)}
+                          className="flex-1 bg-[#F7F7F7] border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#007AFF]/20 transition-all outline-none"
+                        >
+                          <option value="">请选择模型...</option>
+                          {availableModels.map(m => (
+                            <option key={m} value={m}>{m}</option>
+                          ))}
+                        </select>
+                      ) : (
                         <input 
                           value={apiModel}
                           onChange={(e) => setApiModel(e.target.value)}
-                          placeholder="gpt-4o"
-                          className="w-full bg-[#F7F7F7] border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#007AFF]/20 transition-all outline-none"
+                          placeholder={apiPlatform === 'gemini' ? 'gemini-3-flash-preview' : apiPlatform === 'ollama' ? 'llama3' : 'gpt-3.5-turbo'}
+                          className="flex-1 bg-[#F7F7F7] border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#007AFF]/20 transition-all outline-none"
                         />
-                      </div>
-                    </>
-                  )}
-                  {apiPlatform !== 'custom' && (
-                    <div>
-                      <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">模型选择</label>
-                      <select 
-                        value={apiModel}
-                        onChange={(e) => setApiModel(e.target.value)}
-                        className="w-full bg-[#F7F7F7] border-none rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#007AFF]/20 transition-all outline-none"
+                      )}
+                      <button
+                        onClick={fetchModels}
+                        disabled={isFetchingModels || (!apiKey && apiPlatform !== 'ollama' && apiPlatform !== 'gemini')}
+                        className="px-4 py-3 bg-[#007AFF]/10 text-[#007AFF] font-bold rounded-xl hover:bg-[#007AFF]/20 disabled:opacity-50 whitespace-nowrap transition-all"
                       >
-                        <option value="gemini-3-flash-preview">gemini-3-flash-preview</option>
-                        <option value="gemini-3.1-flash-preview">gemini-3.1-flash-preview</option>
-                        <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview</option>
-                      </select>
+                        {isFetchingModels ? '获取中...' : '获取模型'}
+                      </button>
                     </div>
-                  )}
+                  </div>
                   <div>
                     <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">API 密钥</label>
                     <div className="relative">

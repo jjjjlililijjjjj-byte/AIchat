@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db, Moment, Character, UserSettings, Group } from '../lib/db';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Heart, MessageCircle, Share2, Camera, X, Send, ChevronLeft, Upload } from 'lucide-react';
-import { GoogleGenAI } from '@google/genai';
+import { generateAIResponse } from '../lib/api';
 import { handleImageUpload } from '../lib/utils';
 
 export default function Moments({ onBack, isTabMode = false }: { onBack: () => void, isTabMode?: boolean }) {
@@ -84,13 +84,10 @@ export default function Moments({ onBack, isTabMode = false }: { onBack: () => v
     const char = characters[Math.floor(Math.random() * characters.length)];
 
     try {
-      const ai = new GoogleGenAI({ apiKey: localStorage.getItem('GEMINI_API_KEY') || process.env.GEMINI_API_KEY || '' });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `你现在是${char.name}，${char.worldview}。请发一条简短的朋友圈动态，分享你的生活或感悟（30字以内）。`,
-      });
-
-      const content = response.text || '今天天气不错。';
+      const content = await generateAIResponse(
+        `你现在是${char.name}，${char.worldview}。`,
+        `请发一条简短的朋友圈动态，分享你的生活或感悟（30字以内）。`
+      );
       
       // Generate random likes
       const numLikes = Math.floor(Math.random() * 5);
@@ -167,13 +164,11 @@ export default function Moments({ onBack, isTabMode = false }: { onBack: () => v
       // Randomly comment
       if (Math.random() > 0.5) {
         try {
-          const ai = new GoogleGenAI({ apiKey: localStorage.getItem('GEMINI_API_KEY') || process.env.GEMINI_API_KEY || '' });
-          const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: `你现在是${char.name}，${char.worldview}。你的朋友发了一条朋友圈：“${content}”。请给这条朋友圈写一条简短、符合你人设的评论（20字以内）。`,
-          });
+          const replyText = await generateAIResponse(
+            `你现在是${char.name}，${char.worldview}。`,
+            `你的朋友发了一条朋友圈：“${content}”。请给这条朋友圈写一条简短、符合你人设的评论（20字以内）。`
+          );
 
-          const replyText = response.text || '点赞！';
           const moment = await db.moments.get(momentId);
           if (moment) {
             const newReply = {
@@ -207,13 +202,11 @@ export default function Moments({ onBack, isTabMode = false }: { onBack: () => v
     if (!char) return;
 
     try {
-      const ai = new GoogleGenAI({ apiKey: localStorage.getItem('GEMINI_API_KEY') || process.env.GEMINI_API_KEY || '' });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `你现在是${char.name}，${char.worldview}。你在朋友圈发了一条动态，你的朋友评论了你：“${userComment}”。请给这条评论写一条简短、符合你人设的回复（20字以内）。`,
-      });
+      const replyText = await generateAIResponse(
+        `你现在是${char.name}，${char.worldview}。`,
+        `你在朋友圈发了一条动态，你的朋友评论了你：“${userComment}”。请给这条评论写一条简短、符合你人设的回复（20字以内）。`
+      );
 
-      const replyText = response.text || '谢谢评论！';
       const moment = await db.moments.get(momentId);
       if (moment) {
         const newReply = {
