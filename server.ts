@@ -15,6 +15,9 @@ async function startServer() {
       const { platform, apiKey, url } = req.body;
 
       if (platform === 'gemini') {
+        if (!apiKey || apiKey === 'undefined' || apiKey === 'TODO_KEYHERE' || apiKey.trim() === '') {
+          return res.status(400).json({ error: 'API Key 不能为空。请在“我”页面配置有效的 API 秘钥。' });
+        }
         return res.json({
           models: ['gemini-3-flash-preview', 'gemini-3.1-flash-preview', 'gemini-3.1-pro-preview', 'gemini-2.5-flash-preview-tts', 'gemini-2.5-flash-image']
         });
@@ -27,6 +30,9 @@ async function startServer() {
         const data = await response.json();
         return res.json({ models: data.models?.map((m: any) => m.name) || [] });
       } else {
+        if (!apiKey && platform !== 'ollama') {
+          return res.status(400).json({ error: 'API Key 不能为空。请在“我”页面配置有效的 API 秘钥。' });
+        }
         let baseUrl = url;
         if (!baseUrl) {
           if (platform === 'openai') baseUrl = 'https://api.openai.com/v1';
@@ -89,16 +95,22 @@ async function startServer() {
       if (platform === 'gemini') {
         let finalApiKey = apiKey;
         
-        if (!finalApiKey || finalApiKey === 'undefined' || finalApiKey === 'TODO_KEYHERE') {
-          return res.status(400).json({ error: 'API key not valid. Please configure a valid API key in Settings.' });
+        if (!finalApiKey || finalApiKey === 'undefined' || finalApiKey === 'TODO_KEYHERE' || finalApiKey.trim() === '') {
+          return res.status(400).json({ error: 'API Key 不能为空。请在“我”页面配置有效的 API 秘钥。' });
         }
 
-        const ai = new GoogleGenAI({ apiKey: finalApiKey });
-        const response = await ai.models.generateContent({
-          model: model || 'gemini-3-flash-preview',
-          contents: `${context}\n${prompt}`,
-        });
-        return res.json({ text: response.text || '...' });
+        try {
+          const ai = new GoogleGenAI({ apiKey: finalApiKey });
+          const response = await ai.models.generateContent({
+            model: model || 'gemini-3-flash-preview',
+            contents: `${context}\n${prompt}`,
+          });
+          return res.json({ text: response.text || '...' });
+        } catch (error: any) {
+          console.error("Gemini error:", error);
+          const msg = error.message || String(error);
+          return res.status(500).json({ error: `Gemini API 错误: ${msg}` });
+        }
       } else if (platform === 'ollama') {
         const baseUrl = (url || 'http://localhost:11434').replace(/\/+$/, '');
         const response = await fetch(`${baseUrl}/api/chat`, {
@@ -119,6 +131,10 @@ async function startServer() {
         const data = await response.json();
         return res.json({ text: data.message?.content || '...' });
       } else {
+        if (!apiKey && platform !== 'ollama') {
+          return res.status(400).json({ error: 'API Key 不能为空。请在“我”页面配置有效的 API 秘钥。' });
+        }
+
         let baseUrl = url;
         if (!baseUrl) {
           if (platform === 'openai') baseUrl = 'https://api.openai.com/v1';

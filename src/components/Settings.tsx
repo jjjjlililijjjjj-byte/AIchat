@@ -127,7 +127,8 @@ export default function Settings() {
         
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error || `Proxy Error: ${response.status}`);
+          const errorMsg = typeof errorData.error === 'object' ? (errorData.error.message || JSON.stringify(errorData.error)) : (errorData.error || response.statusText || response.status);
+          throw new Error(errorMsg);
         }
         
         const data = await response.json();
@@ -216,7 +217,8 @@ export default function Settings() {
           isConnected = true;
         } else {
           const errorData = await response.json().catch(() => ({}));
-          errorMessage = `API 连接失败: ${errorData.error || response.status}`;
+          const errorMsg = typeof errorData.error === 'object' ? (errorData.error.message || JSON.stringify(errorData.error)) : (errorData.error || response.statusText || response.status);
+          errorMessage = `API 连接失败: ${errorMsg}`;
         }
       }
     } catch (e) {
@@ -529,7 +531,7 @@ export default function Settings() {
                       )}
                       <button
                         onClick={fetchModels}
-                        disabled={isFetchingModels || (!apiKey && apiPlatform !== 'ollama' && apiPlatform !== 'gemini')}
+                        disabled={isFetchingModels || (!apiKey && apiPlatform !== 'ollama')}
                         className="px-4 py-3 bg-[#007AFF]/10 text-[#007AFF] font-bold rounded-xl hover:bg-[#007AFF]/20 disabled:opacity-50 whitespace-nowrap transition-all"
                       >
                         {isFetchingModels ? '获取中...' : '获取模型'}
