@@ -82,15 +82,31 @@ export default function Settings() {
           }
         } else {
           let baseUrl = apiUrl.replace(/\/+$/, '');
-          const modelsUrl = baseUrl.endsWith('/v1') ? `${baseUrl}/models` : `${baseUrl}/v1/models`;
+          let cleanBaseUrl = baseUrl.replace(/\/chat\/completions$/, '').replace(/\/v1$/, '');
+          
+          const modelsUrlsToTry = [
+            `${cleanBaseUrl}/v1/models`,
+            `${cleanBaseUrl}/models`,
+            `${baseUrl}/models`
+          ];
 
-          const res = await fetch(modelsUrl, {
-            headers: {
-              'Authorization': `Bearer ${apiKey}`,
-              'Content-Type': 'application/json'
+          let res = null;
+          for (const modelsUrl of modelsUrlsToTry) {
+            try {
+              res = await fetch(modelsUrl, {
+                headers: {
+                  'Authorization': `Bearer ${apiKey}`,
+                  'Content-Type': 'application/json'
+                }
+              });
+              if (res.ok) break;
+              if (res.status !== 404) break;
+            } catch (e) {
+              console.error(`Failed to fetch models from ${modelsUrl}:`, e);
             }
-          });
-          if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+          }
+          
+          if (!res || !res.ok) throw new Error(`HTTP error! status: ${res?.status || 500}`);
           const data = await res.json();
           if (data.data && data.data.length > 0) {
             const models = data.data.map((m: any) => m.id);
@@ -143,21 +159,40 @@ export default function Settings() {
           else errorMessage = `Ollama 连接失败 (请确保已开启 CORS)`;
         } else {
           let baseUrl = apiUrl.replace(/\/+$/, '');
-          const testUrl = baseUrl.endsWith('/v1') ? `${baseUrl}/chat/completions` : `${baseUrl}/v1/chat/completions`;
+          
+          let testUrlsToTry = [baseUrl];
+          if (!baseUrl.endsWith('/chat/completions')) {
+            let cleanBaseUrl = baseUrl.replace(/\/v1$/, '');
+            testUrlsToTry = [
+              `${cleanBaseUrl}/v1/chat/completions`,
+              `${cleanBaseUrl}/chat/completions`,
+              `${baseUrl}/chat/completions`
+            ];
+          }
 
-          const response = await fetch(testUrl, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${apiKey}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              model: apiModel || 'gpt-3.5-turbo',
-              messages: [{ role: 'user', content: 'hi' }],
-              max_tokens: 1
-            })
-          });
-          if (response.ok) {
+          let response = null;
+          for (const testUrl of testUrlsToTry) {
+            try {
+              response = await fetch(testUrl, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${apiKey}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  model: apiModel || 'gpt-3.5-turbo',
+                  messages: [{ role: 'user', content: 'hi' }],
+                  max_tokens: 1
+                })
+              });
+              if (response.ok) break;
+              if (response.status !== 404) break;
+            } catch (e) {
+              console.error(`Failed to fetch chat from ${testUrl}:`, e);
+            }
+          }
+          
+          if (response && response.ok) {
             isConnected = true;
           } else {
             errorMessage = `API 连接失败 (状态码: ${response.status})`;

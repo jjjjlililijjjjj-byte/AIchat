@@ -31,24 +31,55 @@ export async function generateAIResponse(context: string, prompt: string): Promi
     } else {
       // For other platforms running locally (e.g. local OpenAI compatible server)
       let baseUrl = apiUrl.replace(/\/+$/, '');
-      const chatUrl = baseUrl.endsWith('/v1') ? `${baseUrl}/chat/completions` : `${baseUrl}/v1/chat/completions`;
+      
+      let chatUrlsToTry = [baseUrl];
+      if (!baseUrl.endsWith('/chat/completions')) {
+        let cleanBaseUrl = baseUrl.replace(/\/v1$/, '');
+        chatUrlsToTry = [
+          `${cleanBaseUrl}/v1/chat/completions`,
+          `${cleanBaseUrl}/chat/completions`,
+          `${baseUrl}/chat/completions`
+        ];
+      }
 
-      const response = await fetch(chatUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: apiModel || 'gpt-3.5-turbo',
-          messages: [
-            { role: 'system', content: context },
-            { role: 'user', content: prompt }
-          ],
-          max_tokens: 1000
-        })
-      });
-      if (!response.ok) throw new Error(`API Error: ${response.status}`);
+      let response = null;
+      let lastStatus = 500;
+      let errorData = null;
+      
+      for (const chatUrl of chatUrlsToTry) {
+        try {
+          response = await fetch(chatUrl, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              model: apiModel || 'gpt-3.5-turbo',
+              messages: [
+                { role: 'system', content: context },
+                { role: 'user', content: prompt }
+              ],
+              max_tokens: 1000
+            })
+          });
+          if (response.ok) {
+            break;
+          } else if (response.status === 404) {
+            lastStatus = response.status;
+          } else {
+            errorData = await response.json().catch(() => ({}));
+            lastStatus = response.status;
+            break;
+          }
+        } catch (e) {
+          console.error(`Failed to fetch chat from ${chatUrl}:`, e);
+        }
+      }
+
+      if (!response || !response.ok) {
+        throw new Error(errorData?.error?.message || errorData?.error || `API Error: ${response?.status || lastStatus}`);
+      }
       const data = await response.json();
       return data.choices?.[0]?.message?.content || '...';
     }

@@ -34,17 +34,38 @@ async function startServer() {
           else baseUrl = 'https://api.openai.com/v1';
         }
         baseUrl = baseUrl.replace(/\/+$/, '');
-        const modelsUrl = baseUrl.endsWith('/v1') ? `${baseUrl}/models` : `${baseUrl}/v1/models`;
-
-        const response = await fetch(modelsUrl, {
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json'
-          }
-        });
         
-        if (!response.ok) {
-          return res.status(response.status).json({ error: `API Error: ${response.status}` });
+        let cleanBaseUrl = baseUrl.replace(/\/chat\/completions$/, '').replace(/\/v1$/, '');
+        
+        // Try multiple possible models endpoints
+        const modelsUrlsToTry = [
+          `${cleanBaseUrl}/v1/models`,
+          `${cleanBaseUrl}/models`,
+          `${baseUrl}/models`
+        ];
+
+        let response = null;
+        let lastStatus = 500;
+        
+        for (const modelsUrl of modelsUrlsToTry) {
+          try {
+            response = await fetch(modelsUrl, {
+              headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+              }
+            });
+            if (response.ok) {
+              break;
+            }
+            lastStatus = response.status;
+          } catch (e) {
+            console.error(`Failed to fetch models from ${modelsUrl}:`, e);
+          }
+        }
+        
+        if (!response || !response.ok) {
+          return res.status(response?.status || lastStatus).json({ error: `API Error: ${response?.status || lastStatus}` });
         }
         
         const data = await response.json();
@@ -99,26 +120,57 @@ async function startServer() {
           else baseUrl = 'https://api.openai.com/v1';
         }
         baseUrl = baseUrl.replace(/\/+$/, '');
-        const chatUrl = baseUrl.endsWith('/v1') ? `${baseUrl}/chat/completions` : `${baseUrl}/v1/chat/completions`;
-
-        const response = await fetch(chatUrl, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            model: model || (platform === 'deepseek' ? 'deepseek-chat' : 'gpt-3.5-turbo'),
-            messages: [
-              { role: 'system', content: context },
-              { role: 'user', content: prompt }
-            ],
-            max_tokens: 1000
-          })
-        });
         
-        if (!response.ok) {
-          return res.status(response.status).json({ error: `API Error: ${response.status}` });
+        let chatUrlsToTry = [baseUrl];
+        if (!baseUrl.endsWith('/chat/completions')) {
+          let cleanBaseUrl = baseUrl.replace(/\/v1$/, '');
+          chatUrlsToTry = [
+            `${cleanBaseUrl}/v1/chat/completions`,
+            `${cleanBaseUrl}/chat/completions`,
+            `${baseUrl}/chat/completions`
+          ];
+        }
+
+        let response = null;
+        let lastStatus = 500;
+        let errorData = null;
+        
+        for (const chatUrl of chatUrlsToTry) {
+          try {
+            response = await fetch(chatUrl, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                model: model || (platform === 'deepseek' ? 'deepseek-chat' : 'gpt-3.5-turbo'),
+                messages: [
+                  { role: 'system', content: context },
+                  { role: 'user', content: prompt }
+                ],
+                max_tokens: 1000
+              })
+            });
+            
+            if (response.ok) {
+              break;
+            } else if (response.status === 404) {
+              // 404 means endpoint not found, try next
+              lastStatus = response.status;
+            } else {
+              // Other errors (401, 400, etc) mean the endpoint is correct but request failed
+              errorData = await response.json().catch(() => ({}));
+              lastStatus = response.status;
+              break;
+            }
+          } catch (e) {
+            console.error(`Failed to fetch chat from ${chatUrl}:`, e);
+          }
+        }
+        
+        if (!response || !response.ok) {
+          return res.status(response?.status || lastStatus).json({ error: errorData?.error?.message || errorData?.error || `API Error: ${response?.status || lastStatus}` });
         }
         
         const data = await response.json();
