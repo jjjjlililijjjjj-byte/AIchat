@@ -3,7 +3,6 @@ import { Key, Database, Info, ChevronRight, Camera, ShieldCheck, LogOut, Github,
 import { motion, AnimatePresence } from 'framer-motion';
 import { db, UserSettings } from '../lib/db';
 import { handleImageUpload } from '../lib/utils';
-import { GoogleGenAI } from '@google/genai';
 
 export default function Settings() {
   const [apiKey, setApiKey] = useState('');
@@ -67,47 +66,63 @@ export default function Settings() {
     setIsFetchingModels(true);
     setAvailableModels([]);
     try {
-      if (apiPlatform === 'gemini') {
-        const models = ['gemini-3-flash-preview', 'gemini-3.1-flash-preview', 'gemini-3.1-pro-preview', 'gemini-2.5-flash-preview-tts', 'gemini-2.5-flash-image'];
-        setAvailableModels(models);
-        if (!models.includes(apiModel)) setApiModel(models[0]);
-      } else if (apiPlatform === 'ollama') {
-        const baseUrl = (apiUrl || 'http://localhost:11434').replace(/\/+$/, '');
-        const res = await fetch(`${baseUrl}/api/tags`);
-        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-        const data = await res.json();
-        if (data.models && data.models.length > 0) {
-          const models = data.models.map((m: any) => m.name);
-          setAvailableModels(models);
-          if (!models.includes(apiModel)) setApiModel(models[0]);
+      const isOllamaDefault = apiPlatform === 'ollama' && !apiUrl;
+      const isLocal = isOllamaDefault || apiUrl.includes('localhost') || apiUrl.includes('127.0.0.1');
+
+      if (isLocal) {
+        if (apiPlatform === 'ollama') {
+          const baseUrl = (apiUrl || 'http://localhost:11434').replace(/\/+$/, '');
+          const res = await fetch(`${baseUrl}/api/tags`);
+          if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+          const data = await res.json();
+          if (data.models && data.models.length > 0) {
+            const models = data.models.map((m: any) => m.name);
+            setAvailableModels(models);
+            if (!models.includes(apiModel)) setApiModel(models[0]);
+          }
+        } else {
+          let baseUrl = apiUrl.replace(/\/+$/, '');
+          const modelsUrl = baseUrl.endsWith('/v1') ? `${baseUrl}/models` : `${baseUrl}/v1/models`;
+
+          const res = await fetch(modelsUrl, {
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+          const data = await res.json();
+          if (data.data && data.data.length > 0) {
+            const models = data.data.map((m: any) => m.id);
+            setAvailableModels(models);
+            if (!models.includes(apiModel)) setApiModel(models[0]);
+          }
         }
       } else {
-        let baseUrl = apiUrl;
-        if (!baseUrl) {
-          if (apiPlatform === 'openai') baseUrl = 'https://api.openai.com/v1';
-          else if (apiPlatform === 'deepseek') baseUrl = 'https://api.deepseek.com';
-          else baseUrl = 'https://api.openai.com/v1';
-        }
-        baseUrl = baseUrl.replace(/\/+$/, '');
-        const modelsUrl = baseUrl.endsWith('/v1') ? `${baseUrl}/models` : `${baseUrl}/v1/models`;
-
-        const res = await fetch(modelsUrl, {
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json'
-          }
+        const response = await fetch('/api/models', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            platform: apiPlatform,
+            apiKey,
+            url: apiUrl
+          })
         });
-        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-        const data = await res.json();
-        if (data.data && data.data.length > 0) {
-          const models = data.data.map((m: any) => m.id);
-          setAvailableModels(models);
-          if (!models.includes(apiModel)) setApiModel(models[0]);
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `Proxy Error: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        if (data.models && data.models.length > 0) {
+          setAvailableModels(data.models);
+          if (!data.models.includes(apiModel)) setApiModel(data.models[0]);
         }
       }
     } catch (error) {
       console.error("Error fetching models:", error);
-      alert(`获取模型列表失败: ${error instanceof Error ? error.message : String(error)}\n请检查 API URL、秘钥和网络连接（可能存在跨域限制）。`);
+      alert(`获取模型列表失败: ${error instanceof Error ? error.message : String(error)}\n请检查 API URL、秘钥和网络连接。`);
     } finally {
       setIsFetchingModels(false);
     }
@@ -117,46 +132,61 @@ export default function Settings() {
     let isConnected = false;
     let errorMessage = 'API 连接测试失败，请检查配置。';
     try {
-      if (apiPlatform === 'gemini') {
-        const ai = new GoogleGenAI({ apiKey: apiKey });
-        await ai.models.generateContent({ model: apiModel || 'gemini-3-flash-preview', contents: "hi" });
-        isConnected = true;
-      } else if (apiPlatform === 'openai' || apiPlatform === 'deepseek' || apiPlatform === 'custom') {
-        let baseUrl = apiUrl;
-        if (!baseUrl) {
-          if (apiPlatform === 'openai') baseUrl = 'https://api.openai.com/v1';
-          else if (apiPlatform === 'deepseek') baseUrl = 'https://api.deepseek.com';
-          else baseUrl = 'https://api.openai.com/v1';
-        }
-        baseUrl = baseUrl.replace(/\/+$/, '');
-        const testUrl = baseUrl.endsWith('/v1') ? `${baseUrl}/chat/completions` : `${baseUrl}/v1/chat/completions`;
+      const isOllamaDefault = apiPlatform === 'ollama' && !apiUrl;
+      const isLocal = isOllamaDefault || apiUrl.includes('localhost') || apiUrl.includes('127.0.0.1');
 
-        const response = await fetch(testUrl, {
+      if (isLocal) {
+        if (apiPlatform === 'ollama') {
+          const baseUrl = (apiUrl || 'http://localhost:11434').replace(/\/+$/, '');
+          const response = await fetch(`${baseUrl}/api/tags`);
+          if (response.ok) isConnected = true;
+          else errorMessage = `Ollama 连接失败 (请确保已开启 CORS)`;
+        } else {
+          let baseUrl = apiUrl.replace(/\/+$/, '');
+          const testUrl = baseUrl.endsWith('/v1') ? `${baseUrl}/chat/completions` : `${baseUrl}/v1/chat/completions`;
+
+          const response = await fetch(testUrl, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              model: apiModel || 'gpt-3.5-turbo',
+              messages: [{ role: 'user', content: 'hi' }],
+              max_tokens: 1
+            })
+          });
+          if (response.ok) {
+            isConnected = true;
+          } else {
+            errorMessage = `API 连接失败 (状态码: ${response.status})`;
+          }
+        }
+      } else {
+        const response = await fetch('/api/chat', {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json'
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            model: apiModel || (apiPlatform === 'deepseek' ? 'deepseek-chat' : 'gpt-3.5-turbo'),
-            messages: [{ role: 'user', content: 'hi' }],
-            max_tokens: 1
+            platform: apiPlatform,
+            apiKey,
+            model: apiModel,
+            url: apiUrl,
+            context: 'You are a helpful assistant.',
+            prompt: 'hi'
           })
         });
+        
         if (response.ok) {
           isConnected = true;
         } else {
-          errorMessage = `API 连接失败 (状态码: ${response.status})`;
+          const errorData = await response.json().catch(() => ({}));
+          errorMessage = `API 连接失败: ${errorData.error || response.status}`;
         }
-      } else if (apiPlatform === 'ollama') {
-        const baseUrl = (apiUrl || 'http://localhost:11434').replace(/\/+$/, '');
-        const response = await fetch(`${baseUrl}/api/tags`);
-        if (response.ok) isConnected = true;
-        else errorMessage = `Ollama 连接失败 (请确保已开启 CORS)`;
       }
     } catch (e) {
       console.error(e);
-      errorMessage = `API 连接异常: ${e instanceof Error ? e.message : String(e)} (可能是跨域限制)`;
+      errorMessage = `API 连接异常: ${e instanceof Error ? e.message : String(e)}`;
     }
 
     if (!isConnected) {

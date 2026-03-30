@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageSquare, Users, Compass, User, Signal, Battery, Wifi, Cloud, ChevronRight, Search } from 'lucide-react';
 import { db, ChatMessage } from './lib/db';
-import { GoogleGenAI } from '@google/genai';
+import { generateAIResponse } from './lib/api';
 import ChatList from './components/ChatList';
 import ChatView from './components/ChatView';
 import GroupChatView from './components/GroupChatView';
@@ -48,13 +48,10 @@ export default function App() {
         const char = characters[Math.floor(Math.random() * characters.length)];
 
         // Generate a random greeting/message
-        const ai = new GoogleGenAI({ apiKey });
-        const response = await ai.models.generateContent({
-          model: 'gemini-3-flash-preview',
-          contents: `你现在是${char.name}，${char.worldview}。请主动给我发一条简短的微信消息（20字以内），像朋友一样找我聊天，不要带任何格式。`,
-        });
-
-        const text = response.text || '在干嘛呢？';
+        const text = await generateAIResponse(
+          `你现在是${char.name}，${char.worldview}。`,
+          `请主动给我发一条简短的微信消息（20字以内），像朋友一样找我聊天，不要带任何格式。`
+        );
         
         const aiMsg: ChatMessage = {
           characterId: char.id!,
