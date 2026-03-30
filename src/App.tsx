@@ -34,8 +34,8 @@ export default function App() {
   // Random character chat initiation
   useEffect(() => {
     const randomChatTimer = setInterval(async () => {
-      const apiKey = localStorage.getItem('GEMINI_API_KEY') || process.env.GEMINI_API_KEY;
-      if (!apiKey) return;
+      const apiKey = localStorage.getItem('API_KEY') || localStorage.getItem('GEMINI_API_KEY') || process.env.GEMINI_API_KEY;
+      if (!apiKey || apiKey === 'undefined' || apiKey === 'TODO_KEYHERE') return;
 
       // 10% chance every 2 minutes (120000ms) to trigger a random message
       if (Math.random() > 0.1) return;
@@ -67,7 +67,7 @@ export default function App() {
           console.log(`New message from ${char.name}: ${text}`);
         }
       } catch (e) {
-        console.error("Random chat error:", e);
+        // Silently ignore random chat errors (like invalid API key) to avoid console spam
       }
     }, 120000); // Check every 2 minutes
 

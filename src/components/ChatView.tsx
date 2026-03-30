@@ -120,7 +120,7 @@ export default function ChatView({ characterId, onBack, setIsAiProcessing, isAiP
 
   const handleSendImage = async (imageUrl: string) => {
     if (!character) return;
-    const apiKey = localStorage.getItem('GEMINI_API_KEY') || process.env.GEMINI_API_KEY;
+    const apiKey = localStorage.getItem('API_KEY') || localStorage.getItem('GEMINI_API_KEY') || process.env.GEMINI_API_KEY;
     if (!apiKey) {
       alert('请先在“我”页面配置 API 秘钥！');
       return;
@@ -154,7 +154,7 @@ export default function ChatView({ characterId, onBack, setIsAiProcessing, isAiP
 
   const handleSendSticker = async (stickerUrl: string, sender: 'user' | 'ai' = 'user') => {
     if (!character) return;
-    const apiKey = localStorage.getItem('GEMINI_API_KEY') || process.env.GEMINI_API_KEY;
+    const apiKey = localStorage.getItem('API_KEY') || localStorage.getItem('GEMINI_API_KEY') || process.env.GEMINI_API_KEY;
     if (!apiKey && sender === 'user') {
       alert('请先在“我”页面配置 API 秘钥！');
       return;
@@ -234,7 +234,7 @@ export default function ChatView({ characterId, onBack, setIsAiProcessing, isAiP
     if (!input.trim() && !pendingImage) return;
     if (!character) return;
     
-    const apiKey = localStorage.getItem('GEMINI_API_KEY') || process.env.GEMINI_API_KEY;
+    const apiKey = localStorage.getItem('API_KEY') || localStorage.getItem('GEMINI_API_KEY') || process.env.GEMINI_API_KEY;
     if (!apiKey) {
       alert('请先在“我”页面配置 API 秘钥！');
       return;

@@ -27,7 +27,7 @@ export default function Settings() {
 
   useEffect(() => {
     const loadSettings = async () => {
-      const storedKey = localStorage.getItem('GEMINI_API_KEY');
+      const storedKey = localStorage.getItem('API_KEY') || localStorage.getItem('GEMINI_API_KEY');
       const storedPlatform = localStorage.getItem('API_PLATFORM') || 'gemini';
       const storedModel = localStorage.getItem('API_MODEL') || 'gemini-3-flash-preview';
       const storedUrl = localStorage.getItem('API_URL') || '';

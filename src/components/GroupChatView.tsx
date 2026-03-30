@@ -77,7 +77,7 @@ export default function GroupChatView({ groupId, onBack, setIsAiProcessing, isAi
   const handleSend = async () => {
     if (!input.trim() || !group) return;
     
-    const apiKey = localStorage.getItem('GEMINI_API_KEY') || process.env.GEMINI_API_KEY;
+    const apiKey = localStorage.getItem('API_KEY') || localStorage.getItem('GEMINI_API_KEY') || process.env.GEMINI_API_KEY;
     if (!apiKey) {
       alert('请先在“我”页面配置 API 秘钥！');
       return;
@@ -136,7 +136,7 @@ export default function GroupChatView({ groupId, onBack, setIsAiProcessing, isAi
   const handleSendImage = async (imageUrl: string) => {
     if (!group) return;
     
-    const apiKey = localStorage.getItem('GEMINI_API_KEY') || process.env.GEMINI_API_KEY;
+    const apiKey = localStorage.getItem('API_KEY') || localStorage.getItem('GEMINI_API_KEY') || process.env.GEMINI_API_KEY;
     if (!apiKey) {
       alert('请先在“我”页面配置 API 秘钥！');
       return;

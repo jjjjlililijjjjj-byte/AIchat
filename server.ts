@@ -87,7 +87,16 @@ async function startServer() {
       const { platform, apiKey, model, url, context, prompt } = req.body;
 
       if (platform === 'gemini') {
-        const ai = new GoogleGenAI({ apiKey: apiKey || process.env.GEMINI_API_KEY || '' });
+        let finalApiKey = apiKey;
+        if (!finalApiKey || finalApiKey === 'undefined' || finalApiKey === 'TODO_KEYHERE') {
+          finalApiKey = process.env.GEMINI_API_KEY || '';
+        }
+        
+        if (!finalApiKey || finalApiKey === 'undefined' || finalApiKey === 'TODO_KEYHERE') {
+          return res.status(400).json({ error: 'API key not valid. Please configure a valid API key in Settings.' });
+        }
+
+        const ai = new GoogleGenAI({ apiKey: finalApiKey });
         const response = await ai.models.generateContent({
           model: model || 'gemini-3-flash-preview',
           contents: `${context}\n${prompt}`,
