@@ -270,7 +270,10 @@ export default function ChatView({ characterId, onBack, setIsAiProcessing, isAiP
     }, 1500);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: localStorage.getItem('GEMINI_API_KEY') || process.env.GEMINI_API_KEY || '' });
+      const apiPlatform = localStorage.getItem('API_PLATFORM') || 'gemini';
+      const apiKey = localStorage.getItem('API_KEY') || localStorage.getItem('GEMINI_API_KEY') || process.env.GEMINI_API_KEY || '';
+      const apiModel = localStorage.getItem('API_MODEL') || 'gemini-3-flash-preview';
+      const apiUrl = localStorage.getItem('API_URL') || '';
       
       // Context logic
       let context = `你现在是${character.name}，${character.worldview}。请用简短、口语化的中文回复。`;
@@ -280,12 +283,61 @@ export default function ChatView({ characterId, onBack, setIsAiProcessing, isAiP
         context += `\n对话历史：\n${history}`;
       }
       
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `${context}\n回复：${userMsg.text}`,
-      });
-      
-      let text = response.text || '...';
+      let text = '...';
+
+      if (apiPlatform === 'gemini') {
+        const ai = new GoogleGenAI({ apiKey: apiKey });
+        const response = await ai.models.generateContent({
+          model: apiModel || 'gemini-3-flash-preview',
+          contents: `${context}\n回复：${userMsg.text}`,
+        });
+        text = response.text || '...';
+      } else if (apiPlatform === 'openai' || apiPlatform === 'deepseek' || apiPlatform === 'custom') {
+        let baseUrl = apiUrl;
+        if (!baseUrl) {
+          if (apiPlatform === 'openai') baseUrl = 'https://api.openai.com/v1';
+          else if (apiPlatform === 'deepseek') baseUrl = 'https://api.deepseek.com';
+          else baseUrl = 'https://api.openai.com/v1';
+        }
+        baseUrl = baseUrl.replace(/\/+$/, '');
+        const chatUrl = baseUrl.endsWith('/v1') ? `${baseUrl}/chat/completions` : `${baseUrl}/v1/chat/completions`;
+
+        const response = await fetch(chatUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: apiModel || (apiPlatform === 'deepseek' ? 'deepseek-chat' : 'gpt-3.5-turbo'),
+            messages: [
+              { role: 'system', content: context },
+              { role: 'user', content: userMsg.text }
+            ],
+            max_tokens: 1000
+          })
+        });
+        if (!response.ok) throw new Error(`API Error: ${response.status}`);
+        const data = await response.json();
+        text = data.choices?.[0]?.message?.content || '...';
+      } else if (apiPlatform === 'ollama') {
+        const baseUrl = (apiUrl || 'http://localhost:11434').replace(/\/+$/, '');
+        const response = await fetch(`${baseUrl}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: apiModel || 'llama3',
+            messages: [
+              { role: 'system', content: context },
+              { role: 'user', content: userMsg.text }
+            ],
+            stream: false
+          })
+        });
+        if (!response.ok) throw new Error(`Ollama Error: ${response.status}`);
+        const data = await response.json();
+        text = data.message?.content || '...';
+      }
       
       // Apply Regex if enabled
       if (regexEnabled && character.regexRules) {

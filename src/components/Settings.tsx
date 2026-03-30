@@ -63,31 +63,51 @@ export default function Settings() {
     try {
       if (apiPlatform === 'gemini') {
         const ai = new GoogleGenAI({ apiKey: apiKey });
-        await ai.models.generateContent({ model: apiModel, contents: "hi" });
+        await ai.models.generateContent({ model: apiModel || 'gemini-3-flash-preview', contents: "hi" });
         isConnected = true;
       } else if (apiPlatform === 'openai' || apiPlatform === 'deepseek' || apiPlatform === 'custom') {
-        const response = await fetch(`${apiUrl || 'https://api.openai.com/v1'}/models`, {
+        let baseUrl = apiUrl;
+        if (!baseUrl) {
+          if (apiPlatform === 'openai') baseUrl = 'https://api.openai.com/v1';
+          else if (apiPlatform === 'deepseek') baseUrl = 'https://api.deepseek.com';
+          else baseUrl = 'https://api.openai.com/v1';
+        }
+        baseUrl = baseUrl.replace(/\/+$/, '');
+        const testUrl = baseUrl.endsWith('/v1') ? `${baseUrl}/chat/completions` : `${baseUrl}/v1/chat/completions`;
+
+        const response = await fetch(testUrl, {
+          method: 'POST',
           headers: {
             'Authorization': `Bearer ${apiKey}`,
             'Content-Type': 'application/json'
-          }
+          },
+          body: JSON.stringify({
+            model: apiModel || (apiPlatform === 'deepseek' ? 'deepseek-chat' : 'gpt-3.5-turbo'),
+            messages: [{ role: 'user', content: 'hi' }],
+            max_tokens: 1
+          })
         });
-        if (response.ok) isConnected = true;
-        else errorMessage = `API 连接失败 (状态码: ${response.status})`;
+        if (response.ok) {
+          isConnected = true;
+        } else {
+          errorMessage = `API 连接失败 (状态码: ${response.status})`;
+        }
       } else if (apiPlatform === 'ollama') {
-        const response = await fetch(`${apiUrl || 'http://localhost:11434'}/api/tags`);
+        const baseUrl = (apiUrl || 'http://localhost:11434').replace(/\/+$/, '');
+        const response = await fetch(`${baseUrl}/api/tags`);
         if (response.ok) isConnected = true;
         else errorMessage = `Ollama 连接失败 (请确保已开启 CORS)`;
       }
     } catch (e) {
       console.error(e);
-      errorMessage = `API 连接异常: ${e instanceof Error ? e.message : String(e)}`;
+      errorMessage = `API 连接异常: ${e instanceof Error ? e.message : String(e)} (可能是跨域限制)`;
     }
 
     if (!isConnected) {
-      if (!confirm(`${errorMessage}\n\n是否仍要保存配置？`)) {
+      if (!confirm(`${errorMessage}\n\n是否仍要强制保存并标记为已连接？(如果您确认配置无误，可选择确定)`)) {
         return;
       }
+      isConnected = true; // Force connected if user insists
     }
 
     localStorage.setItem('API_KEY', apiKey);
@@ -95,7 +115,7 @@ export default function Settings() {
     localStorage.setItem('API_MODEL', apiModel);
     localStorage.setItem('API_URL', apiUrl);
     setApiStatus(isConnected ? 'connected' : 'disconnected');
-    alert(isConnected ? 'API 配置已保存并测试成功。' : 'API 配置已保存（测试未通过）。');
+    alert(isConnected ? 'API 配置已保存。' : 'API 配置已保存（测试未通过）。');
     setActivePanel(null);
   };
 
